@@ -255,6 +255,10 @@
   </div>
 </header>
 
+<div id="installBar" style="display:none; background:#124027; padding:10px 14px; text-align:center;">
+  <button id="installBtn" style="background:#fff; color:#124027; border:none; border-radius:10px; padding:10px 20px; font-size:15px; font-weight:700;">⬇ تثبيت التطبيق على الشاشة الرئيسية</button>
+</div>
+
 <main>
   <div class="count-line" id="countLine"></div>
   <div class="grid" id="grid"></div>
@@ -569,6 +573,33 @@ openDB().then(reload);
 if("serviceWorker" in navigator){
   navigator.serviceWorker.register("sw.js").catch(()=>{});
 }
+
+// ---- Install button (Android/Chrome) ----
+let deferredInstallPrompt = null;
+const installBar = document.getElementById("installBar");
+const installBtn = document.getElementById("installBtn");
+
+window.addEventListener("beforeinstallprompt", (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  installBar.style.display = "block";
+});
+
+installBtn.onclick = async ()=>{
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  const choice = await deferredInstallPrompt.userChoice;
+  if(choice.outcome === "accepted"){
+    showToast("تم تثبيت التطبيق");
+  }
+  deferredInstallPrompt = null;
+  installBar.style.display = "none";
+};
+
+window.addEventListener("appinstalled", ()=>{
+  installBar.style.display = "none";
+  showToast("التطبيق اتثبت على الشاشة الرئيسية");
+});
 </script>
 </body>
 </html>
