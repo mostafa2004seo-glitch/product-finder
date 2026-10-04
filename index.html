@@ -23,7 +23,7 @@
     font-family:"Segoe UI", Tahoma, Arial, sans-serif;
     background:var(--bg);
     color:var(--ink);
-    padding-bottom:100px;
+    padding-bottom:150px;
   }
   header{
     background:var(--accent);
@@ -125,8 +125,13 @@
     border-top:1px solid var(--border);
     padding:10px 12px calc(10px + env(safe-area-inset-bottom));
     display:flex;
-    gap:10px;
+    flex-direction:column;
+    gap:8px;
     z-index:20;
+  }
+  .fab-row{
+    display:flex;
+    gap:10px;
   }
   .btn{
     flex:1;
@@ -266,11 +271,17 @@
 </main>
 
 <div class="fab-bar">
-  <button class="btn btn-secondary" id="backupBtn">نسخة احتياطية</button>
-  <button class="btn btn-primary" id="addBtn">+ تصوير منتج جديد</button>
-  <button class="btn btn-secondary" id="restoreBtn">استرجاع</button>
+  <div class="fab-row">
+    <button class="btn" style="background:#2e7d4f; color:#fff;" id="scanInvoiceBtn">📄 فحص صورة الفاتورة تلقائي</button>
+  </div>
+  <div class="fab-row">
+    <button class="btn btn-secondary" id="backupBtn">نسخة احتياطية</button>
+    <button class="btn btn-primary" id="addBtn">+ تصوير منتج جديد</button>
+    <button class="btn btn-secondary" id="restoreBtn">استرجاع</button>
+  </div>
 </div>
 <input type="file" id="importFile" accept="application/json">
+<input type="file" id="invoiceInput" accept="image/*" capture="environment" style="display:none;">
 
 <!-- Add/Edit Sheet -->
 <div class="overlay" id="overlay">
@@ -294,6 +305,20 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- Invoice scan results modal -->
+<div class="overlay" id="scanOverlay">
+  <div class="sheet">
+    <h2>نتيجة فحص الفاتورة</h2>
+    <div id="scanStatus" style="text-align:center; padding:20px; color:var(--muted); font-size:14px;"></div>
+    <div id="scanResults"></div>
+    <div class="sheet-actions">
+      <button class="btn btn-secondary" id="scanCloseBtn">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <script>
 const DB_NAME = "product-finder-db";
@@ -600,6 +625,168 @@ window.addEventListener("appinstalled", ()=>{
   installBar.style.display = "none";
   showToast("التطبيق اتثبت على الشاشة الرئيسية");
 });
+
+// ---- Invoice scanning (free, on-device OCR via Tesseract.js) ----
+const scanInvoiceBtn = document.getElementById("scanInvoiceBtn");
+const invoiceInput = document.getElementById("invoiceInput");
+const scanOverlay = document.getElementById("scanOverlay");
+const scanStatus = document.getElementById("scanStatus");
+const scanResults = document.getElementById("scanResults");
+const scanCloseBtn = document.getElementById("scanCloseBtn");
+
+scanInvoiceBtn.onclick = ()=> invoiceInput.click();
+scanCloseBtn.onclick = ()=> scanOverlay.classList.remove("show");
+scanOverlay.onclick = (e)=>{ if(e.target === scanOverlay) scanOverlay.classList.remove("show"); };
+
+// Normalize Arabic text for looser matching (remove diacritics/tatweel, unify alef/ya/ta-marbuta)
+function normalizeArabic(s){
+  return (s||"")
+    .replace(/[\u064B-\u0652\u0640]/g,"")
+    .replace(/[إأآا]/g,"ا")
+    .replace(/ى/g,"ي")
+    .replace(/ة/g,"ه")
+    .replace(/[^\u0600-\u06FFa-zA-Z0-9 ]/g," ")
+    .replace(/\s+/g," ")
+    .trim()
+    .toLowerCase();
+}
+
+function wordsOf(s){
+  return normalizeArabic(s).split(" ").filter(w => w.length >= 2);
+}
+
+// Preprocess image: upscale + grayscale + contrast boost, helps free OCR read receipts better
+function preprocessImage(file){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      img.onload = ()=>{
+        const scale = img.width < 1200 ? 2 : 1;
+        const w = img.width * scale, h = img.height * scale;
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        const imgData = ctx.getImageData(0,0,w,h);
+        const d = imgData.data;
+        const contrast = 1.6;
+        const intercept = 128 * (1 - contrast);
+        for(let i=0;i<d.length;i+=4){
+          const gray = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+          let v = gray*contrast + intercept;
+          v = Math.max(0, Math.min(255, v));
+          d[i] = d[i+1] = d[i+2] = v;
+        }
+        ctx.putImageData(imgData, 0, 0);
+        canvas.toBlob((blob)=> resolve(blob), "image/png");
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+invoiceInput.onchange = async (e)=>{
+  const file = e.target.files[0];
+  e.target.value = "";
+  if(!file) return;
+
+  scanResults.innerHTML = "";
+  scanStatus.textContent = "جاري قراءة الفاتورة... (ممكن تاخد دقيقة أول مرة)";
+  scanOverlay.classList.add("show");
+
+  try{
+    if(allProducts.length === 0){
+      allProducts = await getAllProducts();
+    }
+
+    scanStatus.textContent = "جاري تجهيز الصورة...";
+    const processedBlob = await preprocessImage(file);
+
+    const { data } = await Tesseract.recognize(processedBlob, "ara+eng", {
+      logger: (m)=>{
+        if(m.status === "recognizing text"){
+          scanStatus.textContent = `جاري القراءة... ${Math.round((m.progress||0)*100)}%`;
+        } else if(m.status){
+          scanStatus.textContent = "جاري التحضير...";
+        }
+      }
+    });
+
+    const rawText = data.text || "";
+    const lines = rawText.split("\n").map(l=>l.trim()).filter(l=>l.length >= 2);
+
+    if(lines.length === 0){
+      scanStatus.textContent = "مقدرش يقرا نص واضح من الصورة. جرب صورة أوضح وأقرب للورقة.";
+      return;
+    }
+
+    // Build match list: for each saved product, check overlap with each invoice line
+    const matches = [];
+    for(const line of lines){
+      const lineWords = new Set(wordsOf(line));
+      if(lineWords.size === 0) continue;
+      for(const p of allProducts){
+        const prodWords = wordsOf(p.name);
+        if(prodWords.length === 0) continue;
+        let overlap = 0;
+        for(const w of prodWords){ if(lineWords.has(w)) overlap++; }
+        const score = overlap / prodWords.length;
+        if(score >= 0.5){
+          matches.push({line, product:p, score});
+        }
+      }
+    }
+
+    // Dedupe: keep best match per product per line area, sort by score desc
+    const seen = new Set();
+    const finalMatches = [];
+    matches.sort((a,b)=> b.score - a.score);
+    for(const m of matches){
+      const key = m.line + "|" + m.product.id;
+      if(seen.has(key)) continue;
+      seen.add(key);
+      finalMatches.push(m);
+    }
+
+    scanStatus.textContent = "";
+    if(finalMatches.length === 0){
+      scanResults.innerHTML = `
+        <div style="text-align:center; color:var(--muted); font-size:14px; padding:10px 4px 16px;">
+          مفيش تطابق مع منتجات محفوظة عندك. النص اللي اتقرا من الفاتورة:
+        </div>
+        <div style="background:#f4f6f5; border-radius:10px; padding:10px; font-size:13px; max-height:200px; overflow-y:auto; white-space:pre-wrap; line-height:1.8;">${lines.join("\n")}</div>
+      `;
+      return;
+    }
+
+    scanResults.innerHTML = `<div style="font-size:13px; color:var(--muted); margin-bottom:10px;">${finalMatches.length} تطابق محتمل — قارن الاسم في الفاتورة بالصورة واختار الأنسب</div>`;
+    const list = document.createElement("div");
+    list.style.display = "flex";
+    list.style.flexDirection = "column";
+    list.style.gap = "10px";
+    for(const m of finalMatches){
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex; gap:10px; align-items:center; border:1px solid var(--border); border-radius:12px; padding:8px;";
+      row.innerHTML = `
+        <img src="${m.product.image}" style="width:56px; height:56px; border-radius:8px; object-fit:cover; flex-shrink:0;">
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:700; font-size:14px;">${m.product.name}</div>
+          <div style="font-size:12px; color:var(--muted); margin-top:2px;">في الفاتورة: "${m.line}"</div>
+        </div>
+      `;
+      list.appendChild(row);
+    }
+    scanResults.appendChild(list);
+
+  }catch(err){
+    scanStatus.textContent = "حصلت مشكلة أثناء قراءة الصورة. جرب تاني.";
+    console.error(err);
+  }
+};
 </script>
 </body>
 </html>
