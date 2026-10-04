@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#1b5e3a">
+<title>دليل المنتجات</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  :root{
+    --bg:#f4f6f5;
+    --card:#ffffff;
+    --ink:#1b2a22;
+    --muted:#6b7a71;
+    --accent:#1b5e3a;
+    --accent-dark:#124027;
+    --border:#e1e6e3;
+    --danger:#b3261e;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:"Segoe UI", Tahoma, Arial, sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    padding-bottom:100px;
+  }
+  header{
+    background:var(--accent);
+    color:#fff;
+    padding:18px 16px 14px;
+    position:sticky;
+    top:0;
+    z-index:10;
+    box-shadow:0 2px 6px rgba(0,0,0,0.12);
+  }
+  header h1{
+    margin:0 0 10px;
+    font-size:20px;
+    text-align:center;
+  }
+  .search-box{
+    display:flex;
+    gap:8px;
+  }
+  .search-box input{
+    flex:1;
+    padding:12px 14px;
+    border-radius:10px;
+    border:none;
+    font-size:16px;
+    background:#fff;
+    color:var(--ink);
+  }
+  .search-box button{
+    background:rgba(255,255,255,0.18);
+    border:none;
+    color:#fff;
+    border-radius:10px;
+    padding:0 14px;
+    font-size:16px;
+  }
+  main{
+    padding:14px 12px 10px;
+  }
+  .count-line{
+    font-size:13px;
+    color:var(--muted);
+    margin:4px 2px 12px;
+    text-align:center;
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(140px,1fr));
+    gap:12px;
+  }
+  .card{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:14px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    box-shadow:0 1px 3px rgba(0,0,0,0.05);
+  }
+  .card img{
+    width:100%;
+    aspect-ratio:1/1;
+    object-fit:cover;
+    display:block;
+    background:#eee;
+  }
+  .card .name{
+    padding:8px 10px;
+    font-size:14px;
+    font-weight:600;
+    line-height:1.3;
+    flex:1;
+  }
+  .card .row{
+    display:flex;
+    justify-content:flex-end;
+    padding:0 6px 6px;
+  }
+  .card .del{
+    background:none;
+    border:none;
+    color:var(--danger);
+    font-size:12px;
+    padding:6px 8px;
+  }
+  .empty{
+    text-align:center;
+    color:var(--muted);
+    padding:50px 20px;
+    font-size:15px;
+    line-height:1.8;
+  }
+  .fab-bar{
+    position:fixed;
+    bottom:0;
+    right:0;
+    left:0;
+    background:var(--card);
+    border-top:1px solid var(--border);
+    padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+    display:flex;
+    gap:10px;
+    z-index:20;
+  }
+  .btn{
+    flex:1;
+    padding:14px 10px;
+    border-radius:12px;
+    border:none;
+    font-size:15px;
+    font-weight:700;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+  }
+  .btn-primary{
+    background:var(--accent);
+    color:#fff;
+    flex:2;
+  }
+  .btn-secondary{
+    background:#eef1ef;
+    color:var(--ink);
+  }
+  /* modal */
+  .overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.5);
+    display:none;
+    align-items:flex-end;
+    justify-content:center;
+    z-index:50;
+  }
+  .overlay.show{display:flex;}
+  .sheet{
+    background:#fff;
+    width:100%;
+    max-width:480px;
+    border-radius:18px 18px 0 0;
+    padding:18px 16px calc(18px + env(safe-area-inset-bottom));
+    max-height:90vh;
+    overflow-y:auto;
+  }
+  .sheet h2{
+    margin:0 0 14px;
+    font-size:18px;
+    text-align:center;
+  }
+  .preview-wrap{
+    width:100%;
+    aspect-ratio:1/1;
+    background:#eee;
+    border-radius:14px;
+    overflow:hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    margin-bottom:14px;
+    position:relative;
+  }
+  .preview-wrap img{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+  }
+  .preview-wrap .ph{
+    color:var(--muted);
+    font-size:14px;
+    text-align:center;
+    padding:20px;
+  }
+  .pick-row{
+    display:flex;
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .pick-row label{
+    flex:1;
+    background:#eef1ef;
+    border-radius:10px;
+    padding:12px;
+    text-align:center;
+    font-size:14px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .pick-row input[type=file]{display:none;}
+  .sheet input[type=text]{
+    width:100%;
+    padding:14px;
+    font-size:16px;
+    border-radius:10px;
+    border:1px solid var(--border);
+    margin-bottom:14px;
+  }
+  .sheet-actions{
+    display:flex;
+    gap:10px;
+  }
+  .toast{
+    position:fixed;
+    bottom:90px;
+    right:50%;
+    transform:translateX(50%);
+    background:#1b2a22;
+    color:#fff;
+    padding:10px 18px;
+    border-radius:10px;
+    font-size:14px;
+    opacity:0;
+    transition:opacity .25s;
+    z-index:60;
+    pointer-events:none;
+    white-space:nowrap;
+  }
+  .toast.show{opacity:1;}
+  input[type=file]#importFile{display:none;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>دليل المنتجات</h1>
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="اكتب اسم المنتج زي الفاتورة..." autocomplete="off">
+    <button id="clearSearch" title="مسح البحث">✕</button>
+  </div>
+</header>
+
+<main>
+  <div class="count-line" id="countLine"></div>
+  <div class="grid" id="grid"></div>
+  <div class="empty" id="emptyState" style="display:none;"></div>
+</main>
+
+<div class="fab-bar">
+  <button class="btn btn-secondary" id="backupBtn">نسخة احتياطية</button>
+  <button class="btn btn-primary" id="addBtn">+ تصوير منتج جديد</button>
+  <button class="btn btn-secondary" id="restoreBtn">استرجاع</button>
+</div>
+<input type="file" id="importFile" accept="application/json">
+
+<!-- Add/Edit Sheet -->
+<div class="overlay" id="overlay">
+  <div class="sheet">
+    <h2>منتج جديد</h2>
+    <div class="preview-wrap" id="previewWrap">
+      <div class="ph">لسه مفيش صورة</div>
+    </div>
+    <div class="pick-row">
+      <label for="cameraInput">📷 تصوير بالكاميرا</label>
+      <label for="galleryInput">🖼️ اختيار من المعرض</label>
+    </div>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment">
+    <input type="file" id="galleryInput" accept="image/*">
+    <input type="text" id="nameInput" placeholder="اكتب اسم المنتج زي ما هو مكتوب على العلبة">
+    <div class="sheet-actions">
+      <button class="btn btn-secondary" id="cancelBtn">إلغاء</button>
+      <button class="btn btn-primary" id="saveBtn">حفظ المنتج</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const DB_NAME = "product-finder-db";
+const STORE = "products";
+let db;
+
+function openDB(){
+  return new Promise((resolve, reject)=>{
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = (e)=>{
+      const d = e.target.result;
+      if(!d.objectStoreNames.contains(STORE)){
+        const store = d.createObjectStore(STORE, {keyPath:"id"});
+        store.createIndex("name","name",{unique:false});
+      }
+    };
+    req.onsuccess = ()=>{ db = req.result; resolve(db); };
+    req.onerror = ()=> reject(req.error);
+  });
+}
+
+function txStore(mode){
+  return db.transaction(STORE, mode).objectStore(STORE);
+}
+
+function addProduct(product){
+  return new Promise((resolve,reject)=>{
+    const req = txStore("readwrite").add(product);
+    req.onsuccess = ()=>resolve();
+    req.onerror = ()=>reject(req.error);
+  });
+}
+
+function deleteProduct(id){
+  return new Promise((resolve,reject)=>{
+    const req = txStore("readwrite").delete(id);
+    req.onsuccess = ()=>resolve();
+    req.onerror = ()=>reject(req.error);
+  });
+}
+
+function getAllProducts(){
+  return new Promise((resolve,reject)=>{
+    const req = txStore("readonly").getAll();
+    req.onsuccess = ()=>resolve(req.result.sort((a,b)=>b.createdAt-a.createdAt));
+    req.onerror = ()=>reject(req.error);
+  });
+}
+
+function clearAll(){
+  return new Promise((resolve,reject)=>{
+    const req = txStore("readwrite").clear();
+    req.onsuccess = ()=>resolve();
+    req.onerror = ()=>reject(req.error);
+  });
+}
+
+// ---- UI state ----
+let allProducts = [];
+let currentImageData = null;
+
+const grid = document.getElementById("grid");
+const emptyState = document.getElementById("emptyState");
+const countLine = document.getElementById("countLine");
+const searchInput = document.getElementById("searchInput");
+const overlay = document.getElementById("overlay");
+const previewWrap = document.getElementById("previewWrap");
+const nameInput = document.getElementById("nameInput");
+const toast = document.getElementById("toast");
+
+function showToast(msg){
+  toast.textContent = msg;
+  toast.classList.add("show");
+  setTimeout(()=>toast.classList.remove("show"), 1800);
+}
+
+function fileToCompressedDataURL(file, maxSize=900, quality=0.72){
+  return new Promise((resolve,reject)=>{
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e)=>{
+      img.onload = ()=>{
+        let w = img.width, h = img.height;
+        if(w > h){
+          if(w > maxSize){ h = Math.round(h * maxSize/w); w = maxSize; }
+        } else {
+          if(h > maxSize){ w = Math.round(w * maxSize/h); h = maxSize; }
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderGrid(){
+  const q = searchInput.value.trim().toLowerCase();
+  const list = q
+    ? allProducts.filter(p => p.name.toLowerCase().includes(q))
+    : allProducts;
+
+  grid.innerHTML = "";
+  if(allProducts.length === 0){
+    emptyState.style.display = "block";
+    emptyState.textContent = "لسه مفيش منتجات. دوس \"تصوير منتج جديد\" عشان تبدأ.";
+    countLine.textContent = "";
+    return;
+  }
+  if(list.length === 0){
+    emptyState.style.display = "block";
+    emptyState.textContent = "مفيش منتج باسم قريب من اللي كتبته.";
+    countLine.textContent = `${allProducts.length} منتج محفوظ`;
+    return;
+  }
+  emptyState.style.display = "none";
+  countLine.textContent = q
+    ? `${list.length} نتيجة من ${allProducts.length} منتج`
+    : `${allProducts.length} منتج محفوظ`;
+
+  for(const p of list){
+    const card = document.createElement("div");
+    card.className = "card";
+    const img = document.createElement("img");
+    img.src = p.image;
+    img.loading = "lazy";
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = p.name;
+    const row = document.createElement("div");
+    row.className = "row";
+    const del = document.createElement("button");
+    del.className = "del";
+    del.textContent = "حذف";
+    del.onclick = async ()=>{
+      if(confirm(`تحذف "${p.name}"؟`)){
+        await deleteProduct(p.id);
+        await reload();
+        showToast("اتحذف");
+      }
+    };
+    row.appendChild(del);
+    card.appendChild(img);
+    card.appendChild(name);
+    card.appendChild(row);
+    grid.appendChild(card);
+  }
+}
+
+async function reload(){
+  allProducts = await getAllProducts();
+  renderGrid();
+}
+
+// ---- Add sheet ----
+document.getElementById("addBtn").onclick = ()=>{
+  currentImageData = null;
+  nameInput.value = "";
+  previewWrap.innerHTML = '<div class="ph">لسه مفيش صورة</div>';
+  overlay.classList.add("show");
+};
+document.getElementById("cancelBtn").onclick = ()=>{
+  overlay.classList.remove("show");
+};
+overlay.onclick = (e)=>{
+  if(e.target === overlay) overlay.classList.remove("show");
+};
+
+async function handleFile(file){
+  if(!file) return;
+  showToast("بيحمل الصورة...");
+  try{
+    currentImageData = await fileToCompressedDataURL(file);
+    previewWrap.innerHTML = "";
+    const img = document.createElement("img");
+    img.src = currentImageData;
+    previewWrap.appendChild(img);
+  }catch(err){
+    showToast("حصلت مشكلة في الصورة");
+  }
+}
+
+document.getElementById("cameraInput").onchange = (e)=> handleFile(e.target.files[0]);
+document.getElementById("galleryInput").onchange = (e)=> handleFile(e.target.files[0]);
+
+document.getElementById("saveBtn").onclick = async ()=>{
+  const name = nameInput.value.trim();
+  if(!currentImageData){
+    showToast("لازم تصور أو تختار صورة الأول");
+    return;
+  }
+  if(!name){
+    showToast("لازم تكتب اسم المنتج");
+    return;
+  }
+  const product = {
+    id: Date.now() + "-" + Math.random().toString(36).slice(2,8),
+    name,
+    image: currentImageData,
+    createdAt: Date.now()
+  };
+  await addProduct(product);
+  overlay.classList.remove("show");
+  await reload();
+  showToast("اتحفظ المنتج");
+};
+
+// ---- Search ----
+searchInput.oninput = renderGrid;
+document.getElementById("clearSearch").onclick = ()=>{
+  searchInput.value = "";
+  renderGrid();
+  searchInput.focus();
+};
+
+// ---- Backup / Restore ----
+document.getElementById("backupBtn").onclick = async ()=>{
+  const data = await getAllProducts();
+  if(data.length === 0){
+    showToast("مفيش منتجات لتصديرها");
+    return;
+  }
+  const blob = new Blob([JSON.stringify({exportedAt:Date.now(), products:data})], {type:"application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const d = new Date();
+  const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  a.href = url;
+  a.download = `نسخة-احتياطية-المنتجات-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast("تم تنزيل النسخة الاحتياطية");
+};
+
+document.getElementById("restoreBtn").onclick = ()=>{
+  document.getElementById("importFile").click();
+};
+
+document.getElementById("importFile").onchange = async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  try{
+    const text = await file.text();
+    const parsed = JSON.parse(text);
+    const products = parsed.products || parsed;
+    if(!Array.isArray(products)) throw new Error("bad format");
+    let added = 0;
+    for(const p of products){
+      if(!p.id || !p.name || !p.image) continue;
+      try{
+        await addProduct(p);
+        added++;
+      }catch(err){
+        // likely duplicate id, skip
+      }
+    }
+    await reload();
+    showToast(`تم استرجاع ${added} منتج`);
+  }catch(err){
+    showToast("ملف النسخة الاحتياطية غير صالح");
+  }
+  e.target.value = "";
+};
+
+// ---- Init ----
+openDB().then(reload);
+
+// ---- PWA service worker (optional, safe no-op if file missing) ----
+if("serviceWorker" in navigator){
+  navigator.serviceWorker.register("sw.js").catch(()=>{});
+}
+</script>
+</body>
+</html>
